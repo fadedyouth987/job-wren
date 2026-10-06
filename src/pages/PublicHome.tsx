@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { ArrowRight, Bot, CalendarCheck, Check, ChevronDown, Menu, MessageSquareText, PhoneMissed, ShieldCheck, Sparkles, TrendingUp, X } from 'lucide-react';
 import { AppLink } from '../app/router';
 
