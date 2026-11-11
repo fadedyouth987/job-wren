@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'node:path';
+import { readFile } from 'node:fs/promises';
 import { env, assertProductionSecrets } from './server/env';
 import { errorHandler, globalRateLimit, notFound, requestId, securityMiddleware } from './server/security';
 import workspacesRouter from './server/routes/workspaces';
@@ -59,10 +60,25 @@ app.use('/api/team', teamRouter);
 app.use('/api/billing', billingRouter);
 
 async function startServer() {
+  // Unknown API paths must not fall through to the SPA HTML fallback.
+  app.use('/api', notFound);
+
   if (!env.isProduction) {
     const { createServer: createViteServer } = await import('vite');
-    const vite = await createViteServer({ server: { middlewareMode: true }, appType: 'spa' });
+    // In middleware mode, Express owns HTML routing and Vite transforms it.
+    const vite = await createViteServer({ server: { middlewareMode: true }, appType: 'custom' });
     app.use(vite.middlewares);
+    app.get('*', async (req, res, next) => {
+      if (!req.accepts('html')) return next();
+      try {
+        const template = await readFile(path.join(process.cwd(), 'index.html'), 'utf8');
+        const html = await vite.transformIndexHtml(req.originalUrl, template);
+        res.setHeader('Cache-Control', 'no-store');
+        res.status(200).type('html').send(html);
+      } catch (error) {
+        next(error);
+      }
+    });
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath, {
@@ -73,15 +89,11 @@ async function startServer() {
         if (/\.[a-f0-9]{8,}\./.test(filePath)) res.setHeader('Cache-Control', 'public,max-age=31536000,immutable');
       },
     }));
+    app.get('*', (_req, res) => {
+      res.setHeader('Cache-Control', 'no-store');
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
   }
-
-  app.use('/api', notFound);
-
-  const distPath = path.join(process.cwd(), 'dist');
-  app.get('*', (_req, res) => {
-    res.setHeader('Cache-Control', 'no-store');
-    res.sendFile(path.join(distPath, 'index.html'));
-  });
 
   app.use(errorHandler);
 
