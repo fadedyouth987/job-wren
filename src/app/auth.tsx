@@ -20,7 +20,7 @@ type AuthState = {
   workspace: WorkspaceSummary | null;
   workspaceId: string | null;
   needsMfa: boolean;
-  refreshWorkspaces: () => Promise<void>;
+  refreshWorkspaces: (preferredWorkspaceId?: string) => Promise<void>;
   setWorkspaceId: (id: string) => void;
   refreshMfa: () => Promise<void>;
 };
@@ -41,14 +41,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setNeedsMfa(data.currentLevel === 'aal1' && data.nextLevel === 'aal2');
   };
 
-  const refreshWorkspaces = async () => {
+  const refreshWorkspaces = async (preferredWorkspaceId?: string) => {
     const { data: sessionData } = await supabase.auth.getSession();
     if (!sessionData.session) return setWorkspaces([]);
     const data = await apiFetch<{ workspaces: WorkspaceSummary[] }>('/api/workspaces');
     setWorkspaces(data.workspaces);
     setWorkspaceIdState((current) => {
-      if (current && data.workspaces.some((workspace) => workspace.id === current)) return current;
-      const next = data.workspaces[0]?.id ?? null;
+      const next = preferredWorkspaceId && data.workspaces.some((workspace) => workspace.id === preferredWorkspaceId)
+        ? preferredWorkspaceId
+        : current && data.workspaces.some((workspace) => workspace.id === current)
+          ? current
+          : data.workspaces[0]?.id ?? null;
       if (next) localStorage.setItem(WORKSPACE_KEY, next); else localStorage.removeItem(WORKSPACE_KEY);
       return next;
     });
