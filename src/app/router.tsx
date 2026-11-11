@@ -20,10 +20,13 @@ export function usePathname() {
 export function AppLink({ href, children, className = '', onClick }: { href: string; children: ReactNode; className?: string; onClick?: () => void }) {
   return (
     <a href={href} className={className} onClick={(event) => {
-      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      if (event.currentTarget.hasAttribute('download') || href.startsWith('#')) return;
+      const destination = new URL(href, window.location.href);
+      if (destination.origin !== window.location.origin || !['http:', 'https:'].includes(destination.protocol)) return;
       event.preventDefault();
       onClick?.();
-      navigate(href);
+      navigate(destination.pathname + destination.search + destination.hash);
     }}>{children}</a>
   );
 }
